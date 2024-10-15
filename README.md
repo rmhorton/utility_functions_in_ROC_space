@@ -1,14 +1,7 @@
 
-# Contributing
+# Estimating the value of information provided by an ML classifier
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.microsoft.com.
+Most ML models do not give you definitive answers, but they can help you to make better guesses. For classifiers, we typically characterize their performance in terms of a quantity vs. quality tradeoff; if you want to discover more true positives, you will need to accept the possibility of more false positives. A Receiver Operating Characteristic (ROC) curve plots true positive rate (also known as 'sensitivity' or 'recall') against false positive rate (1 - the true negative rate, also known as 'specificity').
 
-When you submit a pull request, a CLA-bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., label, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+Here we show various approaches to estimating the business value of a test with a given sensitivity and specificity. The first way is to use a simple linear combination of values for the four cases in a binary confusion matrix (true positives, false positives, false negatives, and true negatives), plus the overall prevalence (or prior probability) of positive cases. This lets us assign a value to any point in the plane on which an ROC curve is plotted. The optimal score threshold for deciding when a case should be considered positive is selected based on the point on the ROC curve that has the highest payoff. The [ML Utility](https://ml4managers.shinyapps.io/ML_utility/) Shiny app lets you experiment with these parameters.
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
