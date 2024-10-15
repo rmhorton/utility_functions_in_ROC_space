@@ -1,5 +1,5 @@
 ---
-title: "The Party Problem, Bob's Version"
+title: "Party Problem Redux"
 author: "Bob"
 date: "2024-10-14"
 output: html_document
@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Reproducing the textbook calculations
 
-from [Foundations of Decision Analysis](https://www.amazon.com/Foundations-Decision-Analysis-Global-Howard/dp/129207969X/ref=sr_1_3?crid=1PR8PM6TSZKW&dib=eyJ2IjoiMSJ9.esDfJ6IfBGYwlcSn0yrKDikI8tvGW10KseUm29TfRxbhUmhG8ijpAiArAR0iAz1rDL_PtKLVHTeKANDxqw9d_tpYTPuf3FzO1umx1CGyAVXSax_pInoefWiPq0af9dKXkwc8LjrsiOERJoa3Zuk61hR_C-JzKOQuJCOMygDYH2Lhgm6-KLPRkgmCUDfVdoDOIMWxCP_FCo7ItD3kLZidCX7-36lYKBzLj6tpt9oEDjk.G6ekwvN1_hiKW4vr9v6c1xjRHA6x1YsbLNIerxvSKi8&dib_tag=se&keywords=decision+analysis&qid=1728973336&s=books&sprefix=decision+analysis%2Cstripbooks%2C215&sr=1-3) by Howard & Abbas.
+from [Foundations of Decision Analysis](https://www.amazon.com/Foundations-Decision-Analysis-Global-Howard/dp/129207969X) by Howard & Abbas.
 
 ```{r more_libraries, message=FALSE}
 library(ggplot2)
