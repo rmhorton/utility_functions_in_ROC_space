@@ -1,0 +1,226 @@
+---
+title: "Economic Utility of a Binary Classifier"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE)
+```
+
+```{r load_libraries, message=FALSE}
+library(shiny)
+library(dplyr)
+```
+
+```{r ROC_utility_app}
+
+
+# library(pROC)
+
+# REFERENCE_ROC <- 'ROC/randomForest.Rds' #  choose from serialized objects in ROC directory
+# ROC_OBJ <- readRDS(REFERENCE_ROC)
+
+roc_files <- list.files('ROC', pattern='*.Rds')
+
+ROC_LIST <- roc_files %>% gsub('\\.Rds$', '', .) %>% 
+  setNames(roc_files, nm=.) %>% 
+  lapply(function(f) file.path('ROC', f)) %>% 
+  lapply(readRDS)
+
+# ROC_LIST %>% seq_along %>% lapply(function(i) plot(ROC_LIST[[i]], main=names(ROC_LIST)[[i]]))
+
+# TP_value: sold
+# FP_value: refunded
+# TN_value: trashed
+# FN_value: wasted
+
+plot_matrix <- function(x_vec, y_vec, M, ...){
+  n_contour_levels <- 16
+  image(M, col=heat.colors(256), ...)
+  contour(x_vec, y_vec, M, nlevels=n_contour_levels, add=TRUE)
+}
+
+roc_utility <- function(fpr, tpr, P, N, TP_value, FP_value, TN_value, FN_value){
+  actual_pos <- N * P
+  actual_neg <- N * (1 - P)
+  
+  tp <- tpr * actual_pos
+  fn <- (1 - tpr) * actual_pos
+  fp <- fpr * actual_neg
+  tn <- actual_neg - fp # (1 - fpr) * actual_neg
+  
+  (FP_value * fp) + (TN_value * tn) + (TP_value * tp) + (FN_value *fn) 
+}
+
+pr_utility <- function(recall, precision, P, N, TP_value, FP_value, TN_value, FN_value){
+  tpr <- recall
+  
+  # precision = tp/(tp + fp); (tp + fp) = tp/precision; fp = tp/precision - tp
+  
+  actual_pos <- N * P
+  actual_neg <- N * (1 - P)
+  
+  tp <- tpr * actual_pos
+  fn <- (1 - tpr) * actual_pos
+  fp <- tp/precision - tp  # fpr * actual_neg
+  tn <- actual_neg - fp    # (1 - fpr) * actual_neg
+  
+  (FP_value * fp) + (TN_value * tn) + (TP_value * tp) + (FN_value *fn) 
+}
+  
+safe_abline <- function(a, b, col, lwd=3, lty="5A"){
+  # draws dashed line of contrasting colors; handles infinite slope
+  contrast_col <- paste0("dark", gsub("light", "", col))
+  if (is.infinite(b)){
+    abline(v=a, lwd=lwd, lty=1, col=contrast_col)
+    abline(v=a, lwd=lwd, lty=lty, col=col)
+  } else{
+    abline(a, b, lwd=lwd, lty=1, col=contrast_col)
+    abline(a, b, lwd=lwd, lty=lty, col=col)
+  }
+}
+
+plot_roc_utility <- function(roc_obj, N, P_POS, TP_value, FP_value, TN_value, FN_value){
+  FPR <- TPR <- seq(0, 1, length=301)
+  
+  cost_matrix <- outer(FPR, TPR, roc_utility, P_POS, N, TP_value, FP_value, TN_value, FN_value)
+  
+  imar <- 0.02 # inner margin adjustment, so highest payoff point doesn't get chopped off at the edge
+  plot_matrix(FPR, TPR, cost_matrix, xlab="FPR", ylab="TPR", 
+              xlim=c(-imar, 1 + imar), ylim=c(-imar, 1 + imar))
+  
+  # slope of indifference curve
+  s <- function(P) (1 - P)*(TN_value - FP_value) / (P * (TP_value - FN_value))
+  
+  safe_abline(1 - s(P_POS), s(P_POS), col="green")  # line of indifference for cost_matrix[nrow(cost_matrix), ncol(cost_matrix)]
+  safe_abline(0, s(P_POS), col="green")  # line of indifference for cost_matrix[0,0]
+  safe_abline(0, 1, col="lightblue")
+  
+  with(roc_obj, {
+    fpr <- (1 - specificities)
+    tpr <- sensitivities
+    tp <- tpr * N * P_POS
+    fp <- fpr * N * (1 - P_POS)
+    precision <- tp/(tp + fp)
+    lines(fpr, tpr, col="blue", lwd=2)
+    utilities <- roc_utility(fpr, tpr, P_POS, N, TP_value, FP_value, TN_value, FN_value)
+    max_point <- which.max(utilities)
+    points(fpr[max_point], tpr[max_point], bg="darkgreen", col="green", pch=21, cex=3)
+    mtext(sprintf("payoff = %0.2f", utilities[max_point]), side=3, line=2.5, cex=1.5)
+    mtext(sprintf("threshold %0.2f, FPR %0.2f, TPR (recall) %0.2f, precision %0.02f", 
+                  thresholds[max_point], fpr[max_point], tpr[max_point], precision[max_point]), side=3, line=1)
+  })
+}
+
+
+get_tpfp_df <- function(roc_obj, N, P){
+  
+  actual_pos <- N * P
+  actual_neg <- N * (1 - P)
+
+  with(roc_obj, {
+    # actual_pos <- length(cases)
+    # actual_neg <- length(controls)
+    
+    tibble(thresholds=thresholds, tpr=sensitivities, fpr=1-specificities) %>% 
+      mutate(tp=tpr * actual_pos, fp=fpr * actual_neg, 
+             fn=actual_pos - tp, tn=actual_neg - fp,
+             actual_pos=actual_pos, actual_neg=actual_neg,
+             considered_pos=tp + fp,
+             precision=tp/considered_pos, recall=tpr)
+  })
+  
+}
+
+
+plot_pr_utility <- function(roc_obj, N, P_POS, TP_value, FP_value, TN_value, FN_value){
+  
+  tpfp <- get_tpfp_df(roc_obj, N=N, P=P_POS)
+  observed_utilities <- with(tpfp, pr_utility(recall, precision, P_POS, N, TP_value, FP_value, TN_value, FN_value))
+  
+  rec <- prec <- seq(0, 1, length=301)
+  cost_matrix <- outer(rec, prec, pr_utility, P_POS, N, TP_value, FP_value, TN_value, FN_value)
+  # Put bounds on cost matrix; otherwise, negative well at lower right corner soaks up the dynamic range.
+  buffer <- diff(range(observed_utilities, na.rm=TRUE))/2
+  upper_limit <- max(observed_utilities, na.rm=TRUE) + buffer
+  lower_limit <- min(observed_utilities, na.rm=TRUE) - buffer
+  cost_matrix[cost_matrix < lower_limit] <- lower_limit
+  cost_matrix[cost_matrix > upper_limit] <- upper_limit
+  
+  imar <- 0.02 # inner margin adjustment so highest payoff point doesn't get chopped off at the edge
+  plot_matrix(rec, prec, cost_matrix,
+              xlab="Recall", ylab="Precision",
+              xlim=c(-imar, 1 + imar), ylim=c(-imar, 1 + imar))
+  
+  with(tpfp, {
+    lines(recall, precision, col="blue", lwd=2)
+    max_point <- which.max(observed_utilities)
+    points(recall[max_point], precision[max_point], bg="darkgreen", col="green", pch=21, cex=3)
+    mtext(sprintf("payoff = %0.2f", observed_utilities[max_point]), side=3, line=2.5, cex=1.5)
+    mtext(sprintf("threshold %0.2f, FPR %0.2f, TPR (recall) %0.2f, precision %0.2f", 
+                  thresholds[max_point], fpr[max_point], tpr[max_point], precision[max_point]), side=3, line=1)
+  })
+}
+
+ui <- fluidPage(
+
+  titlePanel("Costs and Benefits"),
+
+  sidebarLayout(
+
+    sidebarPanel(
+      selectInput('roc_curve', 'reference model', choices=names(ROC_LIST), selected='randomForest'),
+  
+      radioButtons("mode", "curve type:",
+               c("ROC" = 'plot_roc_utility',
+                 "Precision-Recall" = 'plot_pr_utility')),
+      
+      selectInput("num_units", label = "number of units:",
+                  choices = c(10, 100, 1000, 10000), selected = 100),
+    
+      sliderInput("P_POS", label = "proportion positive:",
+                  min = 0.01, max = 0.99, value = 0.95, step = 0.01),
+    
+      sliderInput("TP_value", label = "value of true positive:",
+                  min = -100, max = 100, value = 50, step = 1),
+    
+      sliderInput("FP_value", label = "value of false positive:",
+                  min = -100, max = 100, value = -70, step = 1),
+    
+      sliderInput("TN_value", label = "value of true negative:",
+                  min = -100, max = 100, value = 0, step = 1),
+    
+      sliderInput("FN_value", label = "value of false negative:",
+                  min = -100, max = 100, value = 0, step = 1)
+    ),
+
+    mainPanel(
+      plotOutput("rocPlot")
+    )
+  )
+)
+
+# input <- list(mode='plot_roc_utility', num_units=1000, P_POS=0.5, TP_value=200, TN_value=-5, FP_value=-300, FN_value=-5)
+# input <- list(mode='plot_pr_utility',  num_units=1000, P_POS=0.5, TP_value=200, TN_value=-5, FP_value=-300, FN_value=-5)
+
+# input <- list(roc_curve='randomForest', mode='plot_pr_utility',  num_units=1000, P_POS=0.05, TP_value=200, TN_value=-5, FP_value=-300, FN_value=-5)
+
+server <- function(input, output) {
+
+  output$rocPlot <- renderPlot({
+    plot_func <- get(input$mode)
+    plot_func(ROC_LIST[[input$roc_curve]], 
+              N=as.numeric(input$num_units), 
+              P_POS=input$P_POS, 
+              TP_value=input$TP_value, 
+              FP_value=input$FP_value, 
+              TN_value=input$TN_value, 
+              FN_value=input$FN_value)
+  }, width=600, height=600)
+}
+
+shinyApp(ui, server, options=list(width=1000, height=1000))
+
+```
+
